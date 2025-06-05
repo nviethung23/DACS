@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+jinja2
+aiohttp
+numpy
+pandas
+scikit-learn
+joblib
+tensorflow
+pyarrow
+python-multipart

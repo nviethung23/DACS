@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Demo DDoS </title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #18181c;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #status-indicator {
+            text-align: right;
+            font-size: 0.95em;
+            margin-bottom: 8px;
+        }
+        .overview-row {
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .stat-card {
+            flex: 1 1 180px;
+            background: #232327;
+            border-radius: 8px;
+            text-align: center;
+            padding: 10px 0 6px 0;
+            font-size: 1em;
+            box-shadow: 0 0 3px #0002;
+        }
+        .stat-label {
+            font-size: 0.98em;
+            color: #aaa;
+        }
+        .stat-value {
+            font-size: 1.5em;
+            margin-bottom: 3px;
+            font-weight: bold;
+        }
+        .stat-requests { color: #2ecc40; }
+        .stat-blocked { color: #ff4136; }
+        .stat-blocked.bg-alert { background: #400; color: #fff; }
+        .stat-ip-blocked { color: #ff8533; }
+        .stat-ip-benign { color: #2ecc71; }
+        .flex-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .panel {
+            background: #232327;
+            border-radius: 8px;
+            padding: 15px;
+            flex: 1;
+            min-width: 300px;
+            box-sizing: border-box;
+            transition: background 0.3s;
+        }
+        .panel.alert {
+            background: #3a1c1c !important;
+            box-shadow: 0 0 10px #ff413666;
+        }
+        .panel h2 {
+            margin-top: 0;
+            font-size: 1.2em;
+            border-bottom: 1px solid #444;
+            padding-bottom: 6px;
+        }
+        .log-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .log-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border-bottom: 1px solid #444;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .log-entry:hover {
+            background: #26262d;
+        }
+        .log-left {
+            display: flex;
+            flex-direction: column;
+        }
+        .log-ip {
+            font-weight: bold;
+        }
+        .log-result {
+            font-size: 0.95em;
+            margin-top: 3px;
+        }
+        .benign {
+            color: #2ecc40;
+        }
+        .blocked {
+            color: #ff4136;
+            font-weight: bold;
+        }
+        .log-detail {
+            font-size: 0.85em;
+            color: #ccc;
+            margin-top: 2px;
+        }
+        .log-right {
+            font-size: 0.8em;
+            color: #ddd;
+            text-align: right;
+            min-width: 60px;
+        }
+        /* Filtering / Search UI */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .filter-bar input, .filter-bar select {
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: none;
+            font-size: 0.9em;
+        }
+        .filter-bar input:focus, .filter-bar select:focus {
+            outline: none;
+        }
+        /* Chart panels */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            margin-top: 10px;
+        }
+        /* Modal popup */
+        .modal-bg {
+            position: fixed; z-index: 9999; left: 0; top: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;
+        }
+        .modal {
+            background: #232327;
+            color: #fff;
+            padding: 25px 28px;
+            border-radius: 10px;
+            max-width: 400px;
+            min-width: 260px;
+            box-shadow: 0 0 30px #000b;
+            position: relative;
+            animation: modal-fadein 0.2s;
+        }
+        @keyframes modal-fadein {
+            from { transform: translateY(30px); opacity:0; }
+            to { transform: translateY(0); opacity:1; }
+        }
+        .modal-close {
+            position: absolute; right: 15px; top: 8px;
+            font-size: 1.1em; color: #ccc; background: none; border: none; cursor: pointer;
+        }
+        .modal-close:hover { color: #fff; }
+        .modal strong { color: #ff4136; }
+        .tooltip {
+            position: relative; display: inline-block; cursor: pointer;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 180px;
+            background-color: #444;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 110%; left: 50%; transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.96em;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        /* Responsive */
+        @media (max-width: 900px) {
+            .flex-row { flex-direction: column; }
+            .overview-row { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Demo Hệ thống Phát hiện & Chặn DDoS </h1>
+
+        <!-- 1. Trạng thái WebSocket -->
+        <div id="status-indicator">
+            <span id="ws-status-dot" style="color:#ccc;">●</span>
+            <span id="ws-status-text">Đang kết nối...</span>
+        </div>
+
+        <!-- 2. Tổng quan thống kê -->
+        <div class="overview-row">
+            <div class="stat-card">
+                <div class="stat-value stat-requests" id="stat-requests">0</div>
+                <div class="stat-label tooltip">Requests/s
+                    <span class="tooltiptext">Tổng số request mỗi giây gần nhất</span>
+                </div>
+            </div>
+            <div class="stat-card" id="stat-blocked-card">
+                <div class="stat-value stat-blocked" id="stat-blocked">0</div>
+                <div class="stat-label tooltip">DDoS Blocked/s
+                    <span class="tooltiptext">Số tấn công DDoS bị chặn mỗi giây gần nhất</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-ip-blocked" id="stat-ip-blocked">0</div>
+                <div class="stat-label tooltip">IP bị chặn
+                    <span class="tooltiptext">Số IP đã bị block trong 30 dòng gần nhất</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-ip-benign" id="stat-ip-benign">0</div>
+                <div class="stat-label tooltip">IP bình thường
+                    <span class="tooltiptext">Số IP bình thường trong 30 dòng gần nhất</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phần filter: Search IP và chọn loại attack -->
+        <div class="filter-bar">
+            <input type="text" id="search-ip" placeholder="Tìm IP..." />
+            <select id="filter-attack">
+                <option value="">Tất cả kết quả</option>
+                <option value="Benign">Benign</option>
+                <option value="DDoS">Tất cả DDoS</option>
+            </select>
+        </div>
+
+        <!-- Phần charts -->
+        <div class="flex-row">
+            <div class="panel" id="panel-requests">
+                <h2>
+                    Số Request & Block / giây
+                    <span class="tooltip">🛈
+                        <span class="tooltiptext">Đường xanh: tổng số request/s. Đường đỏ: số DDoS bị block/s.</span>
+                    </span>
+                </h2>
+                <div class="chart-container">
+                    <canvas id="chart-requests"></canvas>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>
+                    Top Loại Attack (phân bố)
+                    <span class="tooltip">🛈
+                        <span class="tooltiptext">Phân bố các loại tấn công DDoS bị block nhiều nhất</span>
+                    </span>
+                </h2>
+                <div class="chart-container">
+                    <canvas id="chart-top-attacks"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-row">
+            <!-- Bảng IP Blocked -->
+            <div class="panel" style="flex: 1 1 45%;">
+                <h2>IP Đã Bị Chặn</h2>
+                <div class="log-list" id="blocked-list"></div>
+            </div>
+            <!-- Bảng IP Benign -->
+            <div class="panel" style="flex: 1 1 45%;">
+                <h2>IP Lưu Lượng Bình Thường</h2>
+                <div class="log-list" id="benign-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Modal hiển thị chi tiết log -->
+    <div id="modal-bg" class="modal-bg" style="display:none;">
+        <div class="modal" id="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Chèn Chart.js từ CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // --- 1. Khởi tạo biến lưu trữ ---
+        const blockedListDiv = document.getElementById('blocked-list');
+        const benignListDiv  = document.getElementById('benign-list');
+        const searchIpInput   = document.getElementById('search-ip');
+        const filterAttackSel = document.getElementById('filter-attack');
+        const statRequests    = document.getElementById('stat-requests');
+        const statBlocked     = document.getElementById('stat-blocked');
+        const statIpBlocked   = document.getElementById('stat-ip-blocked');
+        const statIpBenign    = document.getElementById('stat-ip-benign');
+        const statBlockedCard = document.getElementById('stat-blocked-card');
+        const panelRequests   = document.getElementById('panel-requests');
+
+        // Modal
+        const modalBg = document.getElementById('modal-bg');
+        const modalBody = document.getElementById('modal-body');
+
+        // WebSocket status
+        const wsStatusDot = document.getElementById('ws-status-dot');
+        const wsStatusText = document.getElementById('ws-status-text');
+
+        // Dùng mảng để giữ toàn bộ logs nhận được qua WebSocket
+        const allLogs = [];
+
+        // Dùng để thống kê số request / block trong mỗi khoảng thời gian (giả định mỗi giây)
+        const requestCounts = [];   // mảng tuples [timestampSecond, countTotal, countBlocked]
+        const topAttacksCount = {}; // object {attackType: count}
+
+        // Chart instances
+        let chartRequests = null;
+        let chartTopAttacks = null;
+
+        function getCurrentSecond() {
+            return Math.floor(Date.now() / 1000);
+        }
+
+        // --- 2. Khởi tạo 2 biểu đồ (Chart.js) ---
+        function initCharts() {
+            // Chart Requests/Blocked per second: loại line chart
+            const ctx1 = document.getElementById('chart-requests').getContext('2d');
+            chartRequests = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Tổng số Request/s',
+                            data: [],
+                            borderColor: '#2ecc40',
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointHoverRadius: 7
+                        },
+                        {
+                            label: 'Số DDoS/Blocked',
+                            data: [],
+                            borderColor: '#ff4136',
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointHoverRadius: 7
+                        }
+                    ]
+                },
+                options: {
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { labels: { color: '#fff' } },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' }
+                        },
+                        y: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            beginAtZero: true,
+                            stepSize: 1
+                        }
+                    }
+                }
+            });
+
+            // Chart Top Attacks: dạng doughnut (pie)
+            const ctx2 = document.getElementById('chart-top-attacks').getContext('2d');
+            chartTopAttacks = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [
+                            '#e74c3c', '#c0392b', '#3498db', '#2980b9', '#f1c40f',
+                            '#f39c12', '#2ecc71', '#27ae60'
+                        ]
+                    }]
+                },
+                options: {
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#fff' } },
+                        tooltip: { enabled: true }
+                    }
+                }
+            });
+        }
+
+        // Cập nhật dữ liệu cho chartRequests và chartTopAttacks
+        function updateCharts(log) {
+            const sec = getCurrentSecond();
+            let entry = requestCounts.find(e => e.sec === sec);
+            if (!entry) {
+                entry = { sec: sec, total: 0, blocked: 0 };
+                requestCounts.push(entry);
+                if (requestCounts.length > 30) requestCounts.shift();
+            }
+            entry.total += 1;
+            if (log.status_code !== 200) entry.blocked += 1;
+
+            // Update chartRequests
+            const labels = requestCounts.map(e => {
+                const d = new Date(e.sec * 1000);
+                return d.toLocaleTimeString();
+            });
+            const dataTotal = requestCounts.map(e => e.total);
+            const dataBlocked = requestCounts.map(e => e.blocked);
+
+            chartRequests.data.labels = labels;
+            chartRequests.data.datasets[0].data = dataTotal;
+            chartRequests.data.datasets[1].data = dataBlocked;
+            chartRequests.update();
+
+            // Top attacks count
+            if (log.status_code !== 200) {
+                const key = log.result;
+                topAttacksCount[key] = (topAttacksCount[key] || 0) + 1;
+            }
+            const sorted = Object.entries(topAttacksCount).sort((a,b) => b[1] - a[1]).slice(0, 5);
+            const labels2 = sorted.map(e => e[0]);
+            const data2 = sorted.map(e => e[1]);
+            chartTopAttacks.data.labels = labels2;
+            chartTopAttacks.data.datasets[0].data = data2;
+            chartTopAttacks.update();
+
+            // 2. Update overview stats
+            statRequests.textContent = entry.total;
+            statBlocked.textContent = entry.blocked;
+            // 3. Cảnh báo nếu block >5/s
+            if (entry.blocked >= 5) {
+                statBlockedCard.classList.add("bg-alert");
+                panelRequests.classList.add("alert");
+            } else {
+                statBlockedCard.classList.remove("bg-alert");
+                panelRequests.classList.remove("alert");
+            }
+        }
+
+        // --- 3. Hiển thị logs vào 2 bảng: blocked và benign ---
+        function renderLogs() {
+            const searchIp = searchIpInput.value.trim().toLowerCase();
+            const filterAttack = filterAttackSel.value;
+
+            // Lọc allLogs theo search + filter
+            const filtered = allLogs.filter(log => {
+                if (searchIp && !log.ip.toLowerCase().includes(searchIp)) return false;
+                if (filterAttack) {
+                    if (filterAttack === 'Benign' && log.status_code !== 200) return false;
+                    if (filterAttack === 'DDoS' && log.status_code === 200) return false;
+                }
+                return true;
+            });
+
+            // Tách ra hai danh sách
+            const blocked = filtered.filter(l => l.status_code !== 200);
+            const benign  = filtered.filter(l => l.status_code === 200);
+
+            // Chỉ lấy 30 bản ghi gần nhất (mỗi bảng)
+            const blockedRecent = blocked.slice(-30).reverse();
+            const benignRecent  = benign.slice(-30).reverse();
+
+            // Render blocked (có thêm onclick xem chi tiết)
+            blockedListDiv.innerHTML = blockedRecent.map((log, idx) => {
+                const isBlocked = log.status_code !== 200;
+                const resultClass = isBlocked ? 'blocked' : 'benign';
+                const resultText = isBlocked ? log.result : "Lưu lượng bình thường";
+                const detailText = isBlocked
+                    ? `Phát hiện: ${log.detection_time} ms | Ngăn chặn: ${log.block_time} ms | Mã: ${log.status_code}`
+                    : `Phát hiện: ${log.detection_time} ms`;
+                return `
+                    <div class="log-entry" onclick="showLogDetail(${log.sec},'${log.ip.replace(/'/g,"")}',${isBlocked})">
+                        <div class="log-left">
+                            <div class="log-ip">🔴 IP: ${log.ip}</div>
+                            <div class="log-result ${resultClass}">${resultText}</div>
+                            <div class="log-detail">${detailText}</div>
+                        </div>
+                        <div class="log-right">${new Date(log.sec * 1000).toLocaleTimeString()}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Render benign (có thêm onclick xem chi tiết)
+            benignListDiv.innerHTML = benignRecent.map((log, idx) => {
+                const resultText = "Lưu lượng bình thường";
+                const detailText = `Phát hiện: ${log.detection_time} ms`;
+                return `
+                    <div class="log-entry" onclick="showLogDetail(${log.sec},'${log.ip.replace(/'/g,"")}',false)">
+                        <div class="log-left">
+                            <div class="log-ip">🟢 IP: ${log.ip}</div>
+                            <div class="log-result benign">${resultText}</div>
+                            <div class="log-detail">${detailText}</div>
+                        </div>
+                        <div class="log-right">${new Date(log.sec * 1000).toLocaleTimeString()}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // 2. Update stats IP
+            statIpBlocked.textContent = blockedRecent.length;
+            statIpBenign.textContent = benignRecent.length;
+        }
+
+        // 4. Xem chi tiết log popup
+        function showLogDetail(sec, ip, isBlocked) {
+            // Tìm log phù hợp
+            const log = allLogs.slice().reverse().find(l => l.sec === sec && l.ip === ip && (isBlocked ? l.status_code !== 200 : l.status_code === 200));
+            if (!log) return;
+            let html = `<div style="font-size:1.2em;margin-bottom:8px;">${isBlocked ? "🔴 <strong>IP Bị Chặn</strong>" : "🟢 <strong>IP Bình thường</strong>"}</div>`;
+            html += `<div><b>IP:</b> ${log.ip}</div>`;
+            if (isBlocked) html += `<div><b>Loại:</b> ${log.result}</div>`;
+            html += `<div><b>Thời điểm:</b> ${new Date(log.sec*1000).toLocaleTimeString()}</div>`;
+            html += `<div><b>Thời gian phát hiện:</b> ${log.detection_time} ms</div>`;
+            if (isBlocked) html += `<div><b>Thời gian ngăn chặn:</b> ${log.block_time} ms</div>`;
+            html += `<div><b>Mã phản hồi:</b> ${log.status_code}</div>`;
+            modalBody.innerHTML = html;
+            modalBg.style.display = "flex";
+        }
+        function closeModal() {
+            modalBg.style.display = "none";
+        }
+        window.closeModal = closeModal;
+        window.showLogDetail = showLogDetail;
+
+        // Khi người dùng gõ IP hoặc chọn lọc, gọi render lại
+        searchIpInput.addEventListener('input', renderLogs);
+        filterAttackSel.addEventListener('change', renderLogs);
+
+        // --- 5. Thiết lập WebSocket và xử lý message mới ---
+        function setupWebSocket() {
+            const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
+            ws.onopen = () => {
+                wsStatusDot.style.color = "#2ecc40";
+                wsStatusText.textContent = "Đã kết nối (Online)";
+                ws.send("ready");
+            };
+            ws.onclose = () => {
+                wsStatusDot.style.color = "#ff4136";
+                wsStatusText.textContent = "Mất kết nối! Đang thử lại...";
+                setTimeout(setupWebSocket, 2000);
+            };
+            ws.onerror = err => {
+                wsStatusDot.style.color = "#ffcc00";
+                wsStatusText.textContent = "Lỗi WebSocket!";
+            };
+            ws.onmessage = event => {
+                try {
+                    const log = JSON.parse(event.data);
+                    log.sec = Math.floor(Date.now() / 1000);
+                    allLogs.push(log);
+                    updateCharts(log);
+                    renderLogs();
+                } catch (e) {
+                    console.error("Không parse được log:", e);
+                }
+            };
+        }
+
+        // Đóng popup khi bấm ngoài vùng modal
+        modalBg.addEventListener('click', function(e) {
+            if (e.target === modalBg) closeModal();
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            setupWebSocket();
+        });
+    </script>
+</body>
+</html>
