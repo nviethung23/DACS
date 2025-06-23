@@ -49,7 +49,7 @@ def group_attack_type(x):
     return attack_group_map.get(x, 'Other')
 
 # ====================== THÔNG SỐ VÀ ĐỌC FILE ======================
-DATA_DIR = r'E:\DACS\DACS\Data\2 file'   # Đổi lại đường dẫn nếu cần
+DATA_DIR = r'E:\DACS\Data\2 file'   # Đổi lại đường dẫn nếu cần
 FILES = glob.glob(os.path.join(DATA_DIR, '*.parquet'))
 
 features_names = [
